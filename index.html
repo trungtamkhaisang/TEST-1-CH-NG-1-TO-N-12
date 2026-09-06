@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Đề số 3 - Toán 12 | Trung Tâm Khai Sáng</title>
+  <title>Đề số 3 - Toán 12 | Hiện đúng sai khi nộp</title>
   <style>
     :root{
       --navy:#082c4a; --blue:#108dcc; --blue2:#12a6c5; --soft:#eef8ff;
@@ -161,6 +161,27 @@
     .submit{background:linear-gradient(90deg,var(--blue),var(--blue2));color:#fff;font-weight:800}
     .reset{background:#edf3f7;color:#627789}
     .result{display:none;margin-top:14px;padding:14px;border-radius:13px;background:#eefaf4;border:1px solid #bde9d1;line-height:1.45}
+
+    .question.review-correct{border-color:#9bd9b7;background:linear-gradient(180deg,#ffffff 0%,#f0fff7 100%)}
+    .question.review-wrong{border-color:#f3b4b4;background:linear-gradient(180deg,#ffffff 0%,#fff7f7 100%)}
+    .option.correct-answer,.tf-row.correct-answer{border-color:#8bd5ad;background:#ecfbf3}
+    .option.wrong-answer,.tf-row.wrong-answer{border-color:#f0aaaa;background:#fff2f2}
+    .short.correct-answer{border-color:#8bd5ad;background:#ecfbf3}
+    .short.wrong-answer{border-color:#f0aaaa;background:#fff2f2}
+    .sheet button.correct{background:#ecfbf3;border-color:#78cf9f;color:#117b4e}
+    .sheet button.wrong{background:#fff2f2;border-color:#eca1a1;color:#b82f2f}
+    .sheet button.partial{background:#fff8e8;border-color:#e5c56a;color:#8a5a00}
+    .review-box{margin-top:12px;border-top:1px solid #cbe9d6;padding-top:12px;display:grid;gap:7px;max-height:420px;overflow:auto}
+    .review-title{font-weight:900;color:var(--navy);margin-top:8px}
+    .review-item{border:1px solid var(--line);border-radius:12px;padding:9px 10px;background:#fff;font-size:13px;line-height:1.45}
+    .review-item.ok{border-color:#9bd9b7;background:#f2fff8}
+    .review-item.bad{border-color:#f3b4b4;background:#fff7f7}
+    .review-item.part{border-color:#e5c56a;background:#fffaf0}
+    .review-status{font-weight:900}
+    .review-status.ok{color:#117b4e}
+    .review-status.bad{color:#b82f2f}
+    .review-status.part{color:#8a5a00}
+    .review-detail{color:#526d80;margin-top:3px}
     .empty{padding:28px;border:2px dashed var(--line);border-radius:16px;text-align:center;color:var(--muted)}
     .footer-note{text-align:center;color:#6a8191;margin-top:38px;font-size:14px}
     @media(max-width:1050px){
@@ -1129,28 +1150,101 @@ function validateStudentInfo(){
   document.getElementById(id)?.addEventListener("input",e=>e.target.classList.remove("invalid"));
 });
 
+
 function normalizeAns(s){ return String(s??"").trim().toLowerCase().replace(",","."); }
-function submitExam(auto=false){
-  if(!auto && !validateStudentInfo()) return;
+function choiceLetter(i){
+  const letters=["A","B","C","D","E","F"];
+  return Number.isInteger(+i) && letters[+i] ? letters[+i] : "—";
+}
+function trueFalseText(v){
+  if(v===null || v===undefined) return "Chưa chọn";
+  return v ? "Đúng" : "Sai";
+}
+function reviewClass(status){
+  return status==="correct" ? "ok" : status==="partial" ? "part" : "bad";
+}
+function reviewText(status){
+  return status==="correct" ? "Đúng" : status==="partial" ? "Đúng một phần" : "Sai";
+}
+function clearReviewMarks(){
+  document.querySelectorAll(".question").forEach(el=>el.classList.remove("review-correct","review-wrong"));
+  document.querySelectorAll(".option,.tf-row,.short").forEach(el=>el.classList.remove("correct-answer","wrong-answer"));
+  document.querySelectorAll("#answerSheet button").forEach(el=>el.classList.remove("correct","wrong","partial"));
+}
+function markAnswerSheet(n,status){
+  const btn=document.querySelector(`#answerSheet button[data-q="${n}"]`);
+  if(!btn) return;
+  btn.classList.remove("correct","wrong","partial");
+  btn.classList.add(status==="correct" ? "correct" : status==="partial" ? "partial" : "wrong");
+}
+function markQuestionCard(n,status){
+  const card=document.getElementById("q"+n);
+  if(!card) return;
+  card.classList.remove("review-correct","review-wrong");
+  card.classList.add(status==="correct" ? "review-correct" : "review-wrong");
+}
+function buildSubmissionReview(){
+  clearReviewMarks();
   let score=0,total=0;
+  const details=[];
   data.questions.forEach((q,idx)=>{
     const n=idx+1;
     if(q.type==="mc"){
       total+=1;
       const el=document.querySelector(`input[name="q${n}"]:checked`);
-      if(el && +el.value===+q.key) score+=1;
+      const selected=el ? +el.value : null;
+      const correct=+q.key;
+      const ok=selected===correct;
+      if(ok) score+=1;
+      document.querySelectorAll(`input[name="q${n}"]`).forEach(input=>{
+        const option=input.closest(".option");
+        if(+input.value===correct) option?.classList.add("correct-answer");
+        if(selected!==null && +input.value===selected && !ok) option?.classList.add("wrong-answer");
+      });
+      const status=ok ? "correct" : "wrong";
+      markQuestionCard(n,status); markAnswerSheet(n,status);
+      details.push({
+        n,status,got:ok?1:0,total:1,
+        detail:`Chọn: ${selected===null?"Chưa chọn":choiceLetter(selected)} · Đáp án đúng: ${choiceLetter(correct)}`
+      });
     }else if(q.type==="tf"){
+      let got=0;
+      const parts=[];
       q.items.forEach((it,k)=>{
         total+=1;
         const el=document.querySelector(`input[name="q${n}_${k}"]:checked`);
-        if(el && (el.value==="true")===Boolean(it.key)) score+=1;
+        const selected=el ? (el.value==="true") : null;
+        const correct=Boolean(it.key);
+        const ok=selected!==null && selected===correct;
+        if(ok){ score+=1; got+=1; }
+        const row=el?.closest(".tf-row") || document.querySelector(`input[name="q${n}_${k}"]`)?.closest(".tf-row");
+        row?.classList.add(ok ? "correct-answer" : "wrong-answer");
+        parts.push(`${String.fromCharCode(97+k)}) ${ok?"✅":"❌"} Chọn: ${trueFalseText(selected)} · Đáp án đúng: ${trueFalseText(correct)}`);
       });
+      const status=got===q.items.length ? "correct" : got>0 ? "partial" : "wrong";
+      markQuestionCard(n,status); markAnswerSheet(n,status);
+      details.push({n,status,got,total:q.items.length,detail:parts.join("<br>")});
     }else{
       total+=1;
-      const val=document.getElementById("short"+n)?.value;
-      if(normalizeAns(val)===normalizeAns(q.key)) score+=1;
+      const input=document.getElementById("short"+n);
+      const val=input?.value || "";
+      const ok=normalizeAns(val)===normalizeAns(q.key);
+      if(ok) score+=1;
+      input?.classList.add(ok ? "correct-answer" : "wrong-answer");
+      const status=ok ? "correct" : "wrong";
+      markQuestionCard(n,status); markAnswerSheet(n,status);
+      details.push({
+        n,status,got:ok?1:0,total:1,
+        detail:`Trả lời: ${esc(val.trim()||"Chưa nhập")} · Đáp án đúng: ${esc(q.key)}`
+      });
     }
   });
+  return {score,total,details};
+}
+function submitExam(auto=false){
+  if(!auto && !validateStudentInfo()) return;
+  const review=buildSubmissionReview();
+  const score=review.score, total=review.total;
   const ten=total?(score/total*10).toFixed(2):"0.00";
   const result=document.getElementById("result");
   const student=getStudentInfo();
@@ -1158,9 +1252,20 @@ function submitExam(auto=false){
   const studentLine = student.name || student.className || student.school
     ? `<div style="margin-bottom:8px"><b>Học sinh:</b> ${esc(student.name||"Chưa nhập")} &nbsp;·&nbsp; <b>Lớp:</b> ${esc(student.className||"Chưa nhập")}<br><b>Trường:</b> ${esc(student.school||"Chưa nhập")}</div>`
     : "";
-  result.innerHTML=`${studentLine}<b>${auto?"Hết giờ – bài đã được nộp":"Kết quả"}</b><br>Đúng <b>${score}/${total}</b> ý.<br>Điểm quy đổi: <b>${ten}/10</b>.`;
+  const detailHtml=review.details.map(item=>{
+    const cls=reviewClass(item.status);
+    return `<div class="review-item ${cls}">
+      <div><b>Câu ${item.n}</b>: <span class="review-status ${cls}">${reviewText(item.status)}</span> <span style="color:#60798e">(${item.got}/${item.total})</span></div>
+      <div class="review-detail">${item.detail}</div>
+    </div>`;
+  }).join("");
+  result.innerHTML=`${studentLine}<b>${auto?"Hết giờ – bài đã được nộp":"Kết quả"}</b><br>Đúng <b>${score}/${total}</b> ý.<br>Điểm quy đổi: <b>${ten}/10</b>.
+  <div class="review-title">Chi tiết đúng / sai từng câu</div>
+  <div class="review-box">${detailHtml}</div>`;
+  typesetMath(result);
   result.scrollIntoView({behavior:"smooth",block:"nearest"});
 }
+
 document.getElementById("submitBtn").onclick=()=>submitExam(false);
 document.getElementById("resetAnswersBtn").onclick=()=>{
   if(confirm("Xóa toàn bộ câu trả lời và làm lại?")){ renderStudent(); restartTimer(); }
